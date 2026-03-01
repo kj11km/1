@@ -1,2 +1,579 @@
--- ═══════════════════════════════════════════════════════════════ -- ✦ S O L A R -- Key system · ESP · Aimbot · Clean GUI -- ═══════════════════════════════════════════════════════════════ 
-local Players = game:GetService("Players") local RunService = game:GetService("RunService") local UserInputService = game:GetService("UserInputService") local TweenService = game:GetService("TweenService") local StarterGui = game:GetService("StarterGui") local LocalPlayer = Players.LocalPlayer local Workspace = game:GetService("Workspace") local Camera = Workspace.CurrentCamera -- ══════════════════════════════════════════════════════════════ -- KEY SYSTEM -- ══════════════════════════════════════════════════════════════ local VALID_KEY = "xiaoyangsb" local SAVE_FILE = "solar_key.txt" local keyUnlocked = false local function IsSaved() pcall(function() if readfile and isfile and isfile(SAVE_FILE) then local s = readfile(SAVE_FILE) if s and s:gsub("%s","") == VALID_KEY then keyUnlocked = true end end end) end local function SaveKey() pcall(function() if writefile then writefile(SAVE_FILE, VALID_KEY) end end) end IsSaved() -- ══════════════════════════════════════════════════════════════ -- CONFIG -- ══════════════════════════════════════════════════════════════ local CFG = { espEnabled = true, espMaxDist = 800, espTeamColors = true, espTeamColor = Color3.fromRGB(50, 130, 255), espEnemyColor = Color3.fromRGB(255, 55, 55), espBox = true, espHighlight = true, espNames = true, espHealth = true, espTracers = true, espDistance = true, aimbotEnabled = false, aimbotBone = "Head", aimbotFOV = 150, aimbotSmoothing = 0.12, -- 0=instant 1=never arrives aimbotTeamCheck = true, aimbotVisible = false, -- wallbang check (off by default, games vary) aimbotKeyIdx = 1, } -- ══════════════════════════════════════════════════════════════ -- HELPERS -- ══════════════════════════════════════════════════════════════ local function GetChar() return LocalPlayer.Character end local function GetRoot() local c = GetChar(); return c and c:FindFirstChild("HumanoidRootPart") end local function IsTeammate(pl) return LocalPlayer.Team ~= nil and pl.Team ~= nil and pl.Team == LocalPlayer.Team end local function ESPColor(pl) if CFG.espTeamColors and IsTeammate(pl) then return CFG.espTeamColor end return CFG.espEnemyColor end local function WorldToScreen(worldPos) local v = Camera:WorldToViewportPoint(worldPos) return Vector2.new(v.X, v.Y), v.Z > 0 end -- ══════════════════════════════════════════════════════════════ -- ESP -- ══════════════════════════════════════════════════════════════ local espFolder = Instance.new("Folder", Workspace); espFolder.Name = "_ESP" local espObjects = {} local function CreateESP(pl) if pl == LocalPlayer or espObjects[pl] then return end local obj = {} local box = Instance.new("SelectionBox") box.LineThickness = 0.055 box.SurfaceTransparency = 0.93 box.Color3 = CFG.espEnemyColor box.SurfaceColor3 = CFG.espEnemyColor box.Parent = espFolder obj.box = box local hl = Instance.new("Highlight") hl.FillTransparency = 0.72 hl.OutlineTransparency = 0 hl.FillColor = CFG.espEnemyColor hl.OutlineColor = CFG.espEnemyColor hl.Parent = espFolder obj.hl = hl local bb = Instance.new("BillboardGui") bb.Size = UDim2.new(0, 200, 0, 64) bb.StudsOffset = Vector3.new(0, 3.4, 0) bb.AlwaysOnTop = true bb.LightInfluence= 0 bb.Parent = espFolder obj.bb = bb local function Lbl(y, sz, col) local l = Instance.new("TextLabel", bb) l.Size = UDim2.new(1,0,0,18); l.Position = UDim2.new(0,0,0,y) l.BackgroundTransparency = 1; l.Font = Enum.Font.GothamBold l.TextSize = sz; l.TextColor3 = col; l.TextStrokeTransparency = 0.28; l.Text = "" return l end obj.nameLbl = Lbl(0, 13, Color3.new(1,1,1)) obj.hpLbl = Lbl(19, 11, Color3.fromRGB(110,255,110)) obj.distLbl = Lbl(36, 10, Color3.fromRGB(180,180,255)) local tr = Drawing.new("Line") tr.Visible=false; tr.Thickness=1.4; tr.Transparency=0.20; tr.Color=CFG.espEnemyColor obj.tracer = tr espObjects[pl] = obj end local function RemoveESP(pl) local obj = espObjects[pl]; if not obj then return end pcall(function() obj.box:Destroy() end) pcall(function() obj.hl:Destroy() end) pcall(function() obj.bb:Destroy() end) pcall(function() obj.tracer:Remove() end) espObjects[pl] = nil end local function HideObj(obj) obj.box.Adornee = nil; obj.hl.Adornee = nil obj.bb.Adornee = nil; obj.tracer.Visible = false end local function UpdateESP() if not CFG.espEnabled then for _, obj in pairs(espObjects) do HideObj(obj) end; return end local myRoot = GetRoot() for _, pl in pairs(Players:GetPlayers()) do if pl == LocalPlayer then continue end if not espObjects[pl] then CreateESP(pl) end local obj = espObjects[pl]; if not obj then continue end local tChar = pl.Character if not tChar then HideObj(obj); continue end local tRoot = tChar:FindFirstChild("HumanoidRootPart") if not tRoot then HideObj(obj); continue end local dist = myRoot and (tRoot.Position-myRoot.Position).Magnitude or 0 if dist > CFG.espMaxDist then HideObj(obj); continue end local col = ESPColor(pl) local tHum = tChar:FindFirstChildOfClass("Humanoid") obj.box.Adornee = CFG.espBox and tChar or nil obj.box.Color3 = col; obj.box.SurfaceColor3 = col obj.hl.Adornee = CFG.espHighlight and tChar or nil obj.hl.FillColor = col; obj.hl.OutlineColor = col obj.bb.Adornee = tChar obj.nameLbl.Visible = CFG.espNames obj.nameLbl.Text = pl.Name obj.nameLbl.TextColor3 = col if CFG.espHealth and tHum then local hp = math.floor(tHum.Health) local mx = math.max(tHum.MaxHealth,1) local pct = hp / mx obj.hpLbl.Visible = true obj.hpLbl.Text = ("HP %d/%d"):format(hp, math.floor(mx)) obj.hpLbl.TextColor3 = Color3.fromRGB(math.floor(255*(1-pct)), math.floor(255*pct), 50) else obj.hpLbl.Visible = false end obj.distLbl.Visible = CFG.espDistance if CFG.espDistance then obj.distLbl.Text = ("%d st"):format(math.floor(dist)) end if CFG.espTracers then local sp, vis = WorldToScreen(tRoot.Position) if vis then local vp = Camera.ViewportSize obj.tracer.From = Vector2.new(vp.X/2, vp.Y) obj.tracer.To = sp; obj.tracer.Color = col; obj.tracer.Visible = true else obj.tracer.Visible = false end else obj.tracer.Visible = false end end end Players.PlayerRemoving:Connect(RemoveESP) Players.PlayerAdded:Connect(CreateESP) for _, pl in pairs(Players:GetPlayers()) do CreateESP(pl) end -- ══════════════════════════════════════════════════════════════ -- AIMBOT (fully fixed) -- Key fixes: -- 1. aimKeyHeld tracked via InputBegan/Ended on ALL input, no stale -- closure — we check the CURRENT key at event time AND store which -- input started the hold so InputEnded can match it exactly. -- 2. Visibility raycast: origin is offset from myRoot, and the ray -- ends just short of the bone so it can't hit the target itself. -- We only skip if something OTHER than the target character blocks it. -- 3. Smoothing: alpha = dt / (smoothing + dt) — frame-rate independent -- exponential decay. smoothing=0 → instant, smoothing=0.3 → ~300ms. -- 4. Camera lerp uses slerp on rotation component via CFrame:Lerp which -- already does quaternion slerp internally — no gimbal issues. -- ══════════════════════════════════════════════════════════════ local AIM_KEYS = { { label="RMB", mouse=true, input=Enum.UserInputType.MouseButton2 }, { label="LMB", mouse=true, input=Enum.UserInputType.MouseButton1 }, { label="E", mouse=false, input=Enum.KeyCode.E }, { label="Q", mouse=false, input=Enum.KeyCode.Q }, { label="F", mouse=false, input=Enum.KeyCode.F }, { label="V", mouse=false, input=Enum.KeyCode.V }, { label="Z", mouse=false, input=Enum.KeyCode.Z }, { label="X", mouse=false, input=Enum.KeyCode.X }, } local BONE_NAMES = { "Head", "UpperTorso", "Torso", "HumanoidRootPart" } local BONE_LABELS = { "Head", "UpperTorso", "Torso", "Root" } -- Track exactly which input object started the hold so we can match on end local aimHoldInput = nil -- the actual InputObject that started the hold local function IsAimInput(inp) local k = AIM_KEYS[CFG.aimbotKeyIdx]; if not k then return false end if k.mouse then return inp.UserInputType == k.input else return inp.KeyCode == k.input end end UserInputService.InputBegan:Connect(function(inp, gpe) if gpe then return end if IsAimInput(inp) then aimHoldInput = inp end end) UserInputService.InputEnded:Connect(function(inp) -- Release when the exact same input object ends, OR when matching type ends if inp == aimHoldInput then aimHoldInput = nil; return end if IsAimInput(inp) then aimHoldInput = nil end end) local function AimKeyHeld() if not aimHoldInput then return false end -- Guard: if key was changed while held, release if not IsAimInput(aimHoldInput) then aimHoldInput = nil; return false end return aimHoldInput.UserInputState == Enum.UserInputState.Begin end -- Drawing objects local fovCircle = Drawing.new("Circle") fovCircle.Radius=CFG.aimbotFOV; fovCircle.Thickness=1.6 fovCircle.Color=Color3.fromRGB(255,70,70); fovCircle.Transparency=0.28 fovCircle.Filled=false; fovCircle.Visible=false local aimDot = Drawing.new("Circle") aimDot.Radius=5; aimDot.Thickness=2; aimDot.Color=Color3.fromRGB(255,225,0) aimDot.Transparency=0; aimDot.Filled=true; aimDot.Visible=false local function GetBestTarget() local vp = Camera.ViewportSize local center = Vector2.new(vp.X/2, vp.Y/2) local myChar = GetChar() local myRoot = GetRoot() local best, bestDist = nil, CFG.aimbotFOV for _, pl in pairs(Players:GetPlayers()) do if pl == LocalPlayer then continue end if CFG.aimbotTeamCheck and IsTeammate(pl) then continue end local tChar = pl.Character; if not tChar then continue end local hum = tChar:FindFirstChildOfClass("Humanoid") if not hum or hum.Health <= 0 then continue end local bone = tChar:FindFirstChild(CFG.aimbotBone) or tChar:FindFirstChild("Head") or tChar:FindFirstChild("UpperTorso") or tChar:FindFirstChild("HumanoidRootPart") if not bone then continue end -- ── FIXED visibility check ──────────────────────────── -- Only run if enabled AND we have a valid root if CFG.aimbotVisible and myRoot then local origin = myRoot.Position local dir = bone.Position - origin local dist = dir.Magnitude if dist > 1 then -- Offset origin slightly forward, stop 1 stud before bone -- so we don't clip our own character or the target's hitbox local ray = Ray.new( origin + dir.Unit * 3, dir.Unit * math.max(dist - 4, 0.1) ) local hit = Workspace:FindPartOnRayWithIgnoreList( ray, { myChar, tChar, espFolder } ) -- hit=nil means clear line of sight → proceed -- hit=something means blocked → skip this target if hit then continue end end end -- Project to screen space local raw = Camera:WorldToViewportPoint(bone.Position) if raw.Z <= 0 then continue end -- behind camera local sp = Vector2.new(raw.X, raw.Y) local d = (sp - center).Magnitude if d < bestDist then bestDist = d best = { worldPos=bone.Position, screenPos=sp } end end return best end -- ── FIXED smooth aim ────────────────────────────────────────── -- Frame-rate independent using delta time. -- alpha = dt / (smoothing_seconds + dt) -- At dt=1/60 and smoothing=0.12 → alpha ≈ 0.33 per frame → ~3 frames to lock -- At smoothing=0 → alpha=1 → instant snap every frame local lastDt = 1/60 local function SmoothAim(target, dt) local camCF = Camera.CFrame local goalCF = CFrame.new(camCF.Position, target.worldPos) if CFG.aimbotSmoothing <= 0 then Camera.CFrame = goalCF; return end local alpha = dt / (CFG.aimbotSmoothing + dt) Camera.CFrame = camCF:Lerp(goalCF, alpha) end -- ══════════════════════════════════════════════════════════════ -- RENDER LOOP -- ══════════════════════════════════════════════════════════════ RunService.RenderStepped:Connect(function(dt) lastDt = dt UpdateESP() if not CFG.aimbotEnabled then fovCircle.Visible=false; aimDot.Visible=false; return end local vp = Camera.ViewportSize local center = Vector2.new(vp.X/2, vp.Y/2) fovCircle.Position = center; fovCircle.Radius = CFG.aimbotFOV; fovCircle.Visible = true if not AimKeyHeld() then aimDot.Visible=false; return end local target = GetBestTarget() if not target then aimDot.Visible=false; return end aimDot.Position = target.screenPos; aimDot.Visible = true SmoothAim(target, dt) end) -- ══════════════════════════════════════════════════════════════ -- GUI -- ══════════════════════════════════════════════════════════════ pcall(function() local old = LocalPlayer.PlayerGui:FindFirstChild("SolarGUI") if old then old:Destroy() end end) local ScreenGui = Instance.new("ScreenGui") ScreenGui.Name = "SolarGUI" ScreenGui.ResetOnSpawn = false ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Global ScreenGui.IgnoreGuiInset = true ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui") -- ── Palette ─────────────────────────────────────────────────── local C = { bg = Color3.fromRGB(9, 7, 18), panel = Color3.fromRGB(13, 10, 26), card = Color3.fromRGB(20, 15, 38), cardHov = Color3.fromRGB(28, 21, 52), hdr = Color3.fromRGB(14, 10, 30), accent = Color3.fromRGB(105, 30, 215), accentLt = Color3.fromRGB(155, 80, 255), accentDm = Color3.fromRGB(52, 14, 110), div = Color3.fromRGB(32, 20, 58), txtPri = Color3.fromRGB(230, 218, 255), txtSec = Color3.fromRGB(128, 100, 180), txtDim = Color3.fromRGB(60, 44, 100), green = Color3.fromRGB(50, 220, 110), red = Color3.fromRGB(255, 60, 60), slBg = Color3.fromRGB(16, 11, 32), slFill = Color3.fromRGB(100, 28, 210), slKnob = Color3.fromRGB(185, 115, 255), } local PW=360; local PH=530; local HDR=44 local Panel = Instance.new("Frame", ScreenGui) Panel.Size=UDim2.new(0,PW,0,PH); Panel.Position=UDim2.new(0.04,0,0.06,0) Panel.BackgroundColor3=C.bg; Panel.BorderSizePixel=0; Panel.ClipsDescendants=false Instance.new("UICorner",Panel).CornerRadius=UDim.new(0,12) -- Outer glow ring local Glow=Instance.new("Frame",Panel) Glow.Size=UDim2.new(1,14,1,14); Glow.Position=UDim2.new(0,-7,0,-7) Glow.BackgroundColor3=C.accent; Glow.BackgroundTransparency=0.76 Glow.ZIndex=0; Glow.BorderSizePixel=0 Instance.new("UICorner",Glow).CornerRadius=UDim.new(0,18) -- Header local Header=Instance.new("Frame",Panel) Header.Size=UDim2.new(1,0,0,HDR); Header.BackgroundColor3=C.hdr Header.BorderSizePixel=0; Header.ZIndex=3 Instance.new("UICorner",Header).CornerRadius=UDim.new(0,12) local HPatch=Instance.new("Frame",Header) -- square off bottom corners HPatch.Size=UDim2.new(1,0,0,12); HPatch.Position=UDim2.new(0,0,1,-12) HPatch.BackgroundColor3=C.hdr; HPatch.BorderSizePixel=0 -- Accent strip local Strip=Instance.new("Frame",Header) Strip.Size=UDim2.new(0,3,1,-14); Strip.Position=UDim2.new(0,0,0,7) Strip.BackgroundColor3=C.accentLt; Strip.BorderSizePixel=0 Instance.new("UICorner",Strip).CornerRadius=UDim.new(0,2) local TitleLbl=Instance.new("TextLabel",Header) TitleLbl.Size=UDim2.new(1,-70,1,0); TitleLbl.Position=UDim2.new(0,11,0,0) TitleLbl.BackgroundTransparency=1; TitleLbl.Font=Enum.Font.GothamBold; TitleLbl.TextSize=15 TitleLbl.TextColor3=C.txtPri; TitleLbl.Text="✦ solar" TitleLbl.TextXAlignment=Enum.TextXAlignment.Left -- Minimize button local MinBtn=Instance.new("TextButton",Header) MinBtn.Size=UDim2.new(0,26,0,22); MinBtn.Position=UDim2.new(1,-32,0.5,-11) MinBtn.BackgroundColor3=C.accentDm; MinBtn.BorderSizePixel=0 MinBtn.Font=Enum.Font.GothamBold; MinBtn.TextSize=11 MinBtn.TextColor3=C.accentLt; MinBtn.Text="—"; MinBtn.ZIndex=4 Instance.new("UICorner",MinBtn).CornerRadius=UDim.new(0,6) -- Body local Body=Instance.new("Frame",Panel) Body.Size=UDim2.new(1,0,0,PH-HDR); Body.Position=UDim2.new(0,0,0,HDR) Body.BackgroundTransparency=1; Body.ClipsDescendants=true -- Tab bar local TabBar=Instance.new("Frame",Body) TabBar.Size=UDim2.new(1,-16,0,30); TabBar.Position=UDim2.new(0,8,0,7) TabBar.BackgroundTransparency=1 -- Content pane local Content=Instance.new("Frame",Body) Content.Size=UDim2.new(1,-16,1,-48); Content.Position=UDim2.new(0,8,0,44) Content.BackgroundColor3=C.panel; Content.BorderSizePixel=0; Content.ClipsDescendants=true Instance.new("UICorner",Content).CornerRadius=UDim.new(0,10) -- ── Tab system ──────────────────────────────────────────────── local tabList={}; local CW=PW-28 local function SelectTab(name) for _,t in pairs(tabList) do local on=t.name==name TweenService:Create(t.btn,TweenInfo.new(0.12),{ BackgroundColor3=on and C.accent or C.card, TextColor3 =on and C.txtPri or C.txtDim, }):Play() t.sf.Visible=on end end local function AddTab(name) local btn=Instance.new("TextButton",TabBar) btn.BackgroundColor3=C.card; btn.BorderSizePixel=0 btn.Font=Enum.Font.GothamBold; btn.TextSize=11 btn.TextColor3=C.txtDim; btn.Text=name Instance.new("UICorner",btn).CornerRadius=UDim.new(0,8) local sf=Instance.new("ScrollingFrame",Content) sf.Size=UDim2.new(1,0,1,0); sf.BackgroundTransparency=1; sf.BorderSizePixel=0 sf.ScrollBarThickness=3; sf.ScrollBarImageColor3=C.accentDm sf.CanvasSize=UDim2.new(0,0,0,0); sf.Visible=false local lay=Instance.new("UIListLayout",sf) lay.Padding=UDim.new(0,5); lay.HorizontalAlignment=Enum.HorizontalAlignment.Center lay.Changed:Connect(function() sf.CanvasSize=UDim2.new(0,0,0,lay.AbsoluteContentSize.Y+10) end) local pad=Instance.new("UIPadding",sf) pad.PaddingTop=UDim.new(0,7); pad.PaddingLeft=UDim.new(0,4); pad.PaddingRight=UDim.new(0,4) table.insert(tabList,{name=name,btn=btn,sf=sf}) btn.MouseButton1Click:Connect(function() SelectTab(name) end) return sf end -- Key tab is first; ESP + Aimbot are locked until key is entered local keySF = AddTab("🔑 Key") local espSF = AddTab("👁 ESP") local aimSF = AddTab("🎯 Aimbot") -- Store which tabs require unlock local lockedTabs = { ["👁 ESP"]=true, ["🎯 Aimbot"]=true } -- Override SelectTab to block locked tabs local _rawSelect = SelectTab SelectTab = function(name) if lockedTabs[name] and not keyUnlocked then -- Flash the Key tab button to hint the user for _,t in pairs(tabList) do if t.name == "🔑 Key" then TweenService:Create(t.btn, TweenInfo.new(0.07), {BackgroundColor3=Color3.fromRGB(160,40,255)}):Play() task.delay(0.14, function() TweenService:Create(t.btn, TweenInfo.new(0.1), {BackgroundColor3=C.accent}):Play() end) end end return -- block navigation end _rawSelect(name) end do -- layout tabs local n=#tabList; local gap=4 local bw=math.floor((PW-16-gap*(n-1))/n) for i,t in ipairs(tabList) do t.btn.Size=UDim2.new(0,bw,1,0); t.btn.Position=UDim2.new(0,(i-1)*(bw+gap),0,0) end end -- Dim locked tab buttons so they look inactive local function RefreshTabLock() for _,t in pairs(tabList) do local locked = lockedTabs[t.name] and not keyUnlocked t.btn.TextColor3 = locked and C.txtDim or t.btn.TextColor3 -- Add a lock icon suffix if locked if locked then if not t.btn.Text:find("🔒") then t.btn.Text = t.btn.Text .. " 🔒" end else t.btn.Text = t.btn.Text:gsub(" 🔒","") end end end RefreshTabLock() -- ══════════════════════════════════════════════════════════════ -- WIDGET LIBRARY -- ══════════════════════════════════════════════════════════════ local function Card(parent,h) local f=Instance.new("Frame",parent) f.Size=UDim2.new(1,0,0,h or 38); f.BackgroundColor3=C.card; f.BorderSizePixel=0 Instance.new("UICorner",f).CornerRadius=UDim.new(0,9) return f end local function SecLabel(parent,text) local row=Instance.new("Frame",parent) row.Size=UDim2.new(1,0,0,18); row.BackgroundTransparency=1 local lbl=Instance.new("TextLabel",row) lbl.Size=UDim2.new(0,0,1,0); lbl.AutomaticSize=Enum.AutomaticSize.X lbl.BackgroundTransparency=1; lbl.Font=Enum.Font.GothamBold; lbl.TextSize=9 lbl.TextColor3=C.accentLt; lbl.Text=text:upper(); lbl.TextXAlignment=Enum.TextXAlignment.Left local line=Instance.new("Frame",row) line.Size=UDim2.new(1,-#text*6.5,0,1); line.Position=UDim2.new(0,#text*6.5+4,0.5,0) line.BackgroundColor3=C.div; line.BorderSizePixel=0 end local function InfoLbl(parent,text) local l=Instance.new("TextLabel",parent) l.Size=UDim2.new(1,0,0,12); l.BackgroundTransparency=1 l.Font=Enum.Font.Gotham; l.TextSize=10; l.TextColor3=C.txtDim l.Text=text; l.TextXAlignment=Enum.TextXAlignment.Left end -- Toggle → returns setOn(bool) function local function Toggle(parent,icon,label,default,onChange) local on=default or false local card=Card(parent,38) local ico=Instance.new("TextLabel",card) ico.Size=UDim2.new(0,26,1,0); ico.Position=UDim2.new(0,8,0,0) ico.BackgroundTransparency=1; ico.Font=Enum.Font.GothamBold ico.TextSize=15; ico.TextColor3=C.accentLt; ico.Text=icon local lbl=Instance.new("TextLabel",card) lbl.Size=UDim2.new(1,-86,1,0); lbl.Position=UDim2.new(0,36,0,0) lbl.BackgroundTransparency=1; lbl.Font=Enum.Font.GothamBold lbl.TextSize=12; lbl.TextColor3=C.txtPri; lbl.Text=label lbl.TextXAlignment=Enum.TextXAlignment.Left local pillBg=Instance.new("Frame",card) pillBg.Size=UDim2.new(0,36,0,18); pillBg.Position=UDim2.new(1,-46,0.5,-9) pillBg.BackgroundColor3=on and C.accent or C.slBg; pillBg.BorderSizePixel=0 Instance.new("UICorner",pillBg).CornerRadius=UDim.new(1,0) local knob=Instance.new("Frame",pillBg) knob.Size=UDim2.new(0,14,0,14) knob.Position=on and UDim2.new(1,-16,0.5,-7) or UDim2.new(0,2,0.5,-7) knob.BackgroundColor3=Color3.new(1,1,1); knob.BorderSizePixel=0 Instance.new("UICorner",knob).CornerRadius=UDim.new(1,0) local hit=Instance.new("TextButton",card) hit.Size=UDim2.new(1,0,1,0); hit.BackgroundTransparency=1; hit.Text="" local function SetOn(v) on=v TweenService:Create(pillBg,TweenInfo.new(0.13),{BackgroundColor3=on and C.accent or C.slBg}):Play() TweenService:Create(knob, TweenInfo.new(0.13),{Position=on and UDim2.new(1,-16,0.5,-7) or UDim2.new(0,2,0.5,-7)}):Play() onChange(on) end hit.MouseButton1Click:Connect(function() SetOn(not on) end) return SetOn end -- Slider → returns setValue(number) function local function Slider(parent,icon,label,minV,maxV,default,suffix,onChange) local card=Card(parent,54); local val=default local ico=Instance.new("TextLabel",card) ico.Size=UDim2.new(0,22,0,20); ico.Position=UDim2.new(0,8,0,4) ico.BackgroundTransparency=1; ico.Font=Enum.Font.GothamBold ico.TextSize=14; ico.TextColor3=C.accentLt; ico.Text=icon local lbl=Instance.new("TextLabel",card) lbl.Size=UDim2.new(1,-80,0,20); lbl.Position=UDim2.new(0,32,0,4) lbl.BackgroundTransparency=1; lbl.Font=Enum.Font.GothamBold lbl.TextSize=12; lbl.TextColor3=C.txtPri; lbl.Text=label lbl.TextXAlignment=Enum.TextXAlignment.Left local valLbl=Instance.new("TextLabel",card) valLbl.Size=UDim2.new(0,56,0,20); valLbl.Position=UDim2.new(1,-60,0,4) valLbl.BackgroundTransparency=1; valLbl.Font=Enum.Font.GothamBold valLbl.TextSize=12; valLbl.TextColor3=C.accentLt valLbl.Text=tostring(default)..(suffix or ""); valLbl.TextXAlignment=Enum.TextXAlignment.Right local trackBg=Instance.new("Frame",card) trackBg.Size=UDim2.new(1,-18,0,6); trackBg.Position=UDim2.new(0,9,0,36) trackBg.BackgroundColor3=C.slBg; trackBg.BorderSizePixel=0 Instance.new("UICorner",trackBg).CornerRadius=UDim.new(1,0) local p0=(default-minV)/(maxV-minV) local fill=Instance.new("Frame",trackBg) fill.Size=UDim2.new(p0,0,1,0); fill.BackgroundColor3=C.slFill; fill.BorderSizePixel=0 Instance.new("UICorner",fill).CornerRadius=UDim.new(1,0) local knob=Instance.new("Frame",trackBg) knob.Size=UDim2.new(0,14,0,14); knob.Position=UDim2.new(p0,-7,0.5,-7) knob.BackgroundColor3=C.slKnob; knob.BorderSizePixel=0 Instance.new("UICorner",knob).CornerRadius=UDim.new(1,0) local sliding=false knob.InputBegan:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 then sliding=true end end) UserInputService.InputEnded:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 then sliding=false end end) UserInputService.InputChanged:Connect(function(i) if sliding and i.UserInputType==Enum.UserInputType.MouseMovement then local p=math.clamp((i.Position.X-trackBg.AbsolutePosition.X)/trackBg.AbsoluteSize.X,0,1) val=math.round(minV+(maxV-minV)*p) fill.Size=UDim2.new(p,0,1,0); knob.Position=UDim2.new(p,-7,0.5,-7) valLbl.Text=tostring(val)..(suffix or ""); onChange(val) end end) local function SetValue(v) val=math.clamp(v,minV,maxV) local p=(val-minV)/(maxV-minV) fill.Size=UDim2.new(p,0,1,0); knob.Position=UDim2.new(p,-7,0.5,-7) valLbl.Text=tostring(val)..(suffix or ""); onChange(val) end return SetValue end -- SegPick — row of mutually-exclusive buttons -- onChange(idx, label) called ONCE per click only local function SegPick(parent,opts,default,onChange) local n=#opts; local card=Card(parent,34); local btns={} local function Highlight(sel) for i,b in ipairs(btns) do TweenService:Create(b,TweenInfo.new(0.1),{ BackgroundColor3=i==sel and C.accent or C.slBg, TextColor3 =i==sel and C.txtPri or C.txtDim, }):Play() end end local gap=3; local bw=math.floor((CW-4-gap*(n-1))/n) for i,opt in ipairs(opts) do local b=Instance.new("TextButton",card) b.Size=UDim2.new(0,bw,1,-8); b.Position=UDim2.new(0,(i-1)*(bw+gap),0,4) b.BackgroundColor3=i==default and C.accent or C.slBg; b.BorderSizePixel=0 b.Font=Enum.Font.GothamBold; b.TextSize=10 b.TextColor3=i==default and C.txtPri or C.txtDim; b.Text=opt Instance.new("UICorner",b).CornerRadius=UDim.new(0,7); btns[i]=b b.MouseButton1Click:Connect(function() Highlight(i); onChange(i,opt) end) end return card end -- ══════════════════════════════════════════════════════════════ -- KEY TAB -- ══════════════════════════════════════════════════════════════ do -- Title card local titleCard = Card(keySF, 68) local sunIco = Instance.new("TextLabel", titleCard) sunIco.Size=UDim2.new(0,50,1,0); sunIco.Position=UDim2.new(0,10,0,0) sunIco.BackgroundTransparency=1; sunIco.Font=Enum.Font.GothamBold sunIco.TextSize=36; sunIco.TextColor3=C.accentLt; sunIco.Text="☀" local titleTxt = Instance.new("TextLabel", titleCard) titleTxt.Size=UDim2.new(1,-70,0,24); titleTxt.Position=UDim2.new(0,62,0,10) titleTxt.BackgroundTransparency=1; titleTxt.Font=Enum.Font.GothamBold titleTxt.TextSize=18; titleTxt.TextColor3=C.txtPri; titleTxt.Text="solar" titleTxt.TextXAlignment=Enum.TextXAlignment.Left local subTxt = Instance.new("TextLabel", titleCard) subTxt.Size=UDim2.new(1,-70,0,16); subTxt.Position=UDim2.new(0,62,0,36) subTxt.BackgroundTransparency=1; subTxt.Font=Enum.Font.Gotham subTxt.TextSize=11; subTxt.TextColor3=C.txtDim subTxt.Text = keyUnlocked and "✓ Unlocked — all features available" or "Enter your key below to unlock" subTxt.TextXAlignment=Enum.TextXAlignment.Left -- Discord invite button SecLabel(keySF, "Get Your Key") local discCard = Card(keySF, 46) local discIco = Instance.new("TextLabel", discCard) discIco.Size=UDim2.new(0,36,1,0); discIco.Position=UDim2.new(0,8,0,0) discIco.BackgroundTransparency=1; discIco.Font=Enum.Font.GothamBold discIco.TextSize=20; discIco.TextColor3=Color3.fromRGB(88,101,242); discIco.Text="💬" local discTxt = Instance.new("TextLabel", discCard) discTxt.Size=UDim2.new(1,-110,1,0); discTxt.Position=UDim2.new(0,46,0,0) discTxt.BackgroundTransparency=1; discTxt.Font=Enum.Font.GothamBold discTxt.TextSize=12; discTxt.TextColor3=C.txtPri; discTxt.Text="Solar Discord" discTxt.TextXAlignment=Enum.TextXAlignment.Left local discSub = Instance.new("TextLabel", discCard) discSub.Size=UDim2.new(1,-110,0,14); discSub.Position=UDim2.new(0,46,0,26) discSub.BackgroundTransparency=1; discSub.Font=Enum.Font.Gotham discSub.TextSize=10; discSub.TextColor3=C.txtDim; discSub.Text="discord.gg/AFK6uMbkzc" discSub.TextXAlignment=Enum.TextXAlignment.Left local discBtn = Instance.new("TextButton", discCard) discBtn.Size=UDim2.new(0,62,0,26); discBtn.Position=UDim2.new(1,-70,0.5,-13) discBtn.BackgroundColor3=Color3.fromRGB(66,75,200); discBtn.BorderSizePixel=0 discBtn.Font=Enum.Font.GothamBold; discBtn.TextSize=11 discBtn.TextColor3=Color3.new(1,1,1); discBtn.Text="Join" Instance.new("UICorner",discBtn).CornerRadius=UDim.new(0,7) discBtn.MouseEnter:Connect(function() TweenService:Create(discBtn,TweenInfo.new(0.1),{BackgroundColor3=Color3.fromRGB(90,105,240)}):Play() end) discBtn.MouseLeave:Connect(function() TweenService:Create(discBtn,TweenInfo.new(0.1),{BackgroundColor3=Color3.fromRGB(66,75,200)}):Play() end) discBtn.MouseButton1Click:Connect(function() pcall(function() if setclipboard then setclipboard("https://discord.gg/AFK6uMbkzc") end end) pcall(function() StarterGui:SetCore("OpenBrowserWindow","https://discord.gg/AFK6uMbkzc") end) local orig = discBtn.Text discBtn.Text = "✓ Copied!" task.delay(2, function() discBtn.Text = orig end) pcall(function() StarterGui:SetCore("SendNotification",{Title="💬 Solar",Text="Copied! discord.gg/AFK6uMbkzc",Duration=3}) end) end) -- Key input SecLabel(keySF, "Enter Key") local inputCard = Card(keySF, 46) -- Show locked/unlocked state if keyUnlocked then -- Already unlocked — show green confirmed state local okIco = Instance.new("TextLabel", inputCard) okIco.Size=UDim2.new(0,30,1,0); okIco.Position=UDim2.new(0,10,0,0) okIco.BackgroundTransparency=1; okIco.Font=Enum.Font.GothamBold okIco.TextSize=18; okIco.TextColor3=C.green; okIco.Text="✓" local okTxt = Instance.new("TextLabel", inputCard) okTxt.Size=UDim2.new(1,-50,1,0); okTxt.Position=UDim2.new(0,42,0,0) okTxt.BackgroundTransparency=1; okTxt.Font=Enum.Font.GothamBold okTxt.TextSize=12; okTxt.TextColor3=C.green; okTxt.Text="Key verified — all tabs unlocked" okTxt.TextXAlignment=Enum.TextXAlignment.Left else -- Input box local kBoxBg = Instance.new("Frame", inputCard) kBoxBg.Size=UDim2.new(1,-110,0,30); kBoxBg.Position=UDim2.new(0,8,0.5,-15) kBoxBg.BackgroundColor3=C.slBg; kBoxBg.BorderSizePixel=0 Instance.new("UICorner",kBoxBg).CornerRadius=UDim.new(0,8) local kBoxBorder = Instance.new("UIStroke", kBoxBg) kBoxBorder.Color=C.accentDm; kBoxBorder.Thickness=1 local kBox = Instance.new("TextBox", kBoxBg) kBox.Size=UDim2.new(1,-12,1,0); kBox.Position=UDim2.new(0,6,0,0) kBox.BackgroundTransparency=1; kBox.Font=Enum.Font.GothamBold kBox.TextSize=13; kBox.TextColor3=C.txtPri kBox.PlaceholderColor3=C.txtDim; kBox.PlaceholderText="Enter key..." kBox.Text=""; kBox.ClearTextOnFocus=false local kStatus = Instance.new("TextLabel", keySF) kStatus.Size=UDim2.new(1,0,0,14); kStatus.BackgroundTransparency=1 kStatus.Font=Enum.Font.GothamBold; kStatus.TextSize=10 kStatus.TextColor3=C.red; kStatus.Text="" kStatus.TextXAlignment=Enum.TextXAlignment.Left local kBtn = Instance.new("TextButton", inputCard) kBtn.Size=UDim2.new(0,90,0,30); kBtn.Position=UDim2.new(1,-98,0.5,-15) kBtn.BackgroundColor3=C.accent; kBtn.BorderSizePixel=0 kBtn.Font=Enum.Font.GothamBold; kBtn.TextSize=12 kBtn.TextColor3=Color3.new(1,1,1); kBtn.Text="🔓 Unlock" Instance.new("UICorner",kBtn).CornerRadius=UDim.new(0,8) kBtn.MouseEnter:Connect(function() TweenService:Create(kBtn,TweenInfo.new(0.1),{BackgroundColor3=C.accentLt}):Play() end) kBtn.MouseLeave:Connect(function() TweenService:Create(kBtn,TweenInfo.new(0.1),{BackgroundColor3=C.accent}):Play() end) -- Shake input box on wrong key local function ShakeBox() local orig = kBoxBg.Position task.spawn(function() for i=1,5 do TweenService:Create(kBoxBg,TweenInfo.new(0.04),{ Position=UDim2.new(orig.X.Scale,orig.X.Offset+(i%2==0 and 6 or -6),orig.Y.Scale,orig.Y.Offset) }):Play(); task.wait(0.05) end TweenService:Create(kBoxBg,TweenInfo.new(0.06),{Position=orig}):Play() end) end local function TryUnlock() local entered = kBox.Text:gsub("%s","") if entered == VALID_KEY then keyUnlocked = true SaveKey() -- Update UI kStatus.TextColor3=C.green; kStatus.Text="✓ Key accepted!" kBtn.Text="✓ Unlocked!"; kBtn.BackgroundColor3=Color3.fromRGB(16,110,55) subTxt.Text="✓ Unlocked — all features available"; subTxt.TextColor3=C.green kBoxBorder.Color=C.green -- Unlock the locked tabs — remove lock icons, re-enable clicks for _,t in pairs(tabList) do t.btn.Text = t.btn.Text:gsub(" 🔒","") t.btn.TextColor3 = C.txtDim end RefreshTabLock() pcall(function() StarterGui:SetCore("SendNotification",{ Title="✦ solar", Text="Key accepted — all features unlocked!", Duration=4, }) end) else kStatus.TextColor3=C.red kStatus.Text="✗ Wrong key — get yours from the Discord" ShakeBox() kBoxBorder.Color=Color3.fromRGB(200,30,30) task.delay(1, function() kBoxBorder.Color=C.accentDm end) end end kBtn.MouseButton1Click:Connect(TryUnlock) kBox.FocusLost:Connect(function(enter) if enter then TryUnlock() end end) end -- Hint at bottom local hintCard = Card(keySF, 28) local hintLbl = Instance.new("TextLabel", hintCard) hintLbl.Size=UDim2.new(1,-16,1,0); hintLbl.Position=UDim2.new(0,8,0,0) hintLbl.BackgroundTransparency=1; hintLbl.Font=Enum.Font.Gotham hintLbl.TextSize=10; hintLbl.TextColor3=C.txtDim hintLbl.Text="Join the Discord → grab your key from #key → paste it above" hintLbl.TextWrapped=true; hintLbl.TextXAlignment=Enum.TextXAlignment.Left end -- ══════════════════════════════════════════════════════════════ -- ESP TAB -- ══════════════════════════════════════════════════════════════ SecLabel(espSF,"Visibility") Toggle(espSF,"👁","ESP", CFG.espEnabled, function(v) CFG.espEnabled =v end) Toggle(espSF,"📦","Box Outline", CFG.espBox, function(v) CFG.espBox =v end) Toggle(espSF,"✨","Body Highlight", CFG.espHighlight, function(v) CFG.espHighlight=v end) SecLabel(espSF,"Labels") Toggle(espSF,"🏷","Names", CFG.espNames, function(v) CFG.espNames =v end) Toggle(espSF,"❤","Health", CFG.espHealth, function(v) CFG.espHealth =v end) Toggle(espSF,"📏","Distance", CFG.espDistance, function(v) CFG.espDistance=v end) Toggle(espSF,"↗","Tracers", CFG.espTracers, function(v) CFG.espTracers =v end) SecLabel(espSF,"Colors") Toggle(espSF,"🔵","Team Colors (blue=ally / red=enemy)",CFG.espTeamColors,function(v) CFG.espTeamColors=v end) do local leg=Card(espSF,26) local t1=Instance.new("TextLabel",leg); t1.Size=UDim2.new(0.5,0,1,0) t1.BackgroundTransparency=1; t1.Font=Enum.Font.GothamBold; t1.TextSize=11 t1.TextColor3=CFG.espTeamColor; t1.Text="🔵 Ally"; t1.TextXAlignment=Enum.TextXAlignment.Center local t2=Instance.new("TextLabel",leg); t2.Size=UDim2.new(0.5,0,1,0); t2.Position=UDim2.new(0.5,0,0,0) t2.BackgroundTransparency=1; t2.Font=Enum.Font.GothamBold; t2.TextSize=11 t2.TextColor3=CFG.espEnemyColor; t2.Text="🔴 Enemy"; t2.TextXAlignment=Enum.TextXAlignment.Center end SecLabel(espSF,"Range") Slider(espSF,"📡","Max Distance",100,2000,CFG.espMaxDist," st",function(v) CFG.espMaxDist=v end) -- ══════════════════════════════════════════════════════════════ -- AIMBOT TAB -- ══════════════════════════════════════════════════════════════ SecLabel(aimSF,"Main") Toggle(aimSF,"🎯","Aimbot", CFG.aimbotEnabled, function(v) CFG.aimbotEnabled=v if not v then fovCircle.Visible=false; aimDot.Visible=false end end) Toggle(aimSF,"👥","Skip Teammates", CFG.aimbotTeamCheck,function(v) CFG.aimbotTeamCheck=v end) Toggle(aimSF,"🧱","Visible Only", CFG.aimbotVisible, function(v) CFG.aimbotVisible =v end) SecLabel(aimSF,"Hold Key") InfoLbl(aimSF,"Hold this button/key to activate aim lock") SegPick(aimSF,{"RMB","LMB","E","Q","F","V","Z","X"},CFG.aimbotKeyIdx,function(idx) CFG.aimbotKeyIdx=idx; aimHoldInput=nil -- clear any stale hold end) SecLabel(aimSF,"Target Bone") SegPick(aimSF,BONE_LABELS,1,function(idx) CFG.aimbotBone=BONE_NAMES[idx] end) SecLabel(aimSF,"FOV") Slider(aimSF,"⭕","FOV Radius",30,700,CFG.aimbotFOV," px",function(v) CFG.aimbotFOV=v; fovCircle.Radius=v end) SecLabel(aimSF,"Smoothing") InfoLbl(aimSF,"0 = instant snap · Higher = slower / smoother follow") Slider(aimSF,"〰","Smoothing",0,60,math.floor(CFG.aimbotSmoothing*100),"%",function(v) CFG.aimbotSmoothing=v/100 end) -- ══════════════════════════════════════════════════════════════ -- MINIMIZE + DRAG -- ══════════════════════════════════════════════════════════════ local minimized=false MinBtn.MouseButton1Click:Connect(function() minimized=not minimized MinBtn.Text=minimized and "□" or "—" TweenService:Create(Body, TweenInfo.new(0.18,Enum.EasingStyle.Quad),{ Size=minimized and UDim2.new(0,0,0,0) or UDim2.new(1,0,0,PH-HDR) }):Play() TweenService:Create(Panel,TweenInfo.new(0.18,Enum.EasingStyle.Quad),{ Size=minimized and UDim2.new(0,PW,0,HDR) or UDim2.new(0,PW,0,PH) }):Play() end) local dragging,dragStart,startPos,dragConn=false,nil,nil,nil Header.InputBegan:Connect(function(input) if input.UserInputType~=Enum.UserInputType.MouseButton1 then return end local mp=input.Position; local ma=MinBtn.AbsolutePosition; local ms=MinBtn.AbsoluteSize if mp.X>=ma.X and mp.X<=ma.X+ms.X and mp.Y>=ma.Y and mp.Y<=ma.Y+ms.Y then return end dragging=true; dragStart=mp; startPos=Panel.Position if dragConn then dragConn:Disconnect() end dragConn=UserInputService.InputChanged:Connect(function(inp) if not dragging then return end if inp.UserInputType==Enum.UserInputType.MouseMovement then local d=inp.Position-dragStart Panel.Position=UDim2.new(startPos.X.Scale,startPos.X.Offset+d.X, startPos.Y.Scale,startPos.Y.Offset+d.Y) end end) end) Header.InputEnded:Connect(function(input) if input.UserInputType==Enum.UserInputType.MouseButton1 then dragging=false; if dragConn then dragConn:Disconnect(); dragConn=nil end end end) -- ══════════════════════════════════════════════════════════════ -- START -- ══════════════════════════════════════════════════════════════ if keyUnlocked then SelectTab("👁 ESP") pcall(function() StarterGui:SetCore("SendNotification",{ Title="✦ solar", Text="Welcome back — all features unlocked!", Duration=4, }) end) else SelectTab("🔑 Key") pcall(function() StarterGui:SetCore("SendNotification",{ Title="✦ solar", Text="Enter your key in the Key tab to get started", Duration=5, }) end) end print("✦ solar loaded")
+-- ═══════════════════════════════════════════════════════════════
+--   ✦  S O L A R
+--   Key system · ESP · Aimbot · Clean GUI
+-- ═══════════════════════════════════════════════════════════════
+local Players          = game:GetService("Players")
+local RunService       = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local TweenService     = game:GetService("TweenService")
+local StarterGui       = game:GetService("StarterGui")
+local LocalPlayer      = Players.LocalPlayer
+local Workspace        = game:GetService("Workspace")
+local Camera           = Workspace.CurrentCamera
+-- ══════════════════════════════════════════════════════════════
+-- KEY SYSTEM
+-- ══════════════════════════════════════════════════════════════
+local VALID_KEY  = "xiaoyangsb"
+local SAVE_FILE  = "solar_key.txt"
+local keyUnlocked = false
+
+local function IsSaved()
+    pcall(function()
+        if readfile and isfile and isfile(SAVE_FILE) then
+            local s = readfile(SAVE_FILE)
+            if s and s:gsub("%s","") == VALID_KEY then keyUnlocked = true end
+        end
+    end)
+end
+local function SaveKey()
+    pcall(function() if writefile then writefile(SAVE_FILE, VALID_KEY) end end)
+end
+IsSaved()
+-- ══════════════════════════════════════════════════════════════
+-- CONFIG
+-- ══════════════════════════════════════════════════════════════
+local CFG = {
+    espEnabled      = true,
+    espMaxDist      = 800,
+    espTeamColors   = true,
+    espTeamColor    = Color3.fromRGB(50,  130, 255),
+    espEnemyColor   = Color3.fromRGB(255,  55,  55),
+    espBox          = true,
+    espHighlight    = true,
+    espNames        = true,
+    espHealth       = true,
+    espTracers      = true,
+    espDistance     = true,
+
+    aimbotEnabled   = false,
+    aimbotBone      = "Head",
+    aimbotFOV       = 150,
+    aimbotSmoothing = 0.12,   -- 0=instant  1=never arrives
+    aimbotTeamCheck = true,
+    aimbotVisible   = false,  -- wallbang check (off by default, games vary)
+    aimbotKeyIdx    = 1,
+}
+-- ══════════════════════════════════════════════════════════════
+-- HELPERS
+-- ══════════════════════════════════════════════════════════════
+local function GetChar()  return LocalPlayer.Character end
+local function GetRoot()
+    local c = GetChar(); return c and c:FindFirstChild("HumanoidRootPart")
+end
+local function IsTeammate(pl)
+    return LocalPlayer.Team ~= nil and pl.Team ~= nil and pl.Team == LocalPlayer.Team
+end
+local function ESPColor(pl)
+    if CFG.espTeamColors and IsTeammate(pl) then return CFG.espTeamColor end
+    return CFG.espEnemyColor
+end
+local function WorldToScreen(worldPos)
+    local v = Camera:WorldToViewportPoint(worldPos)
+    return Vector2.new(v.X, v.Y), v.Z > 0
+end
+-- ══════════════════════════════════════════════════════════════
+-- ESP
+-- ══════════════════════════════════════════════════════════════
+local espFolder  = Instance.new("Folder", Workspace); espFolder.Name = "_ESP"
+local espObjects = {}
+
+local function CreateESP(pl)
+    if pl == LocalPlayer or espObjects[pl] then return end
+    local obj = {}
+
+    local box = Instance.new("SelectionBox")
+    box.LineThickness       = 0.055
+    box.SurfaceTransparency = 0.93
+    box.Color3              = CFG.espEnemyColor
+    box.SurfaceColor3       = CFG.espEnemyColor
+    box.Parent              = espFolder
+    obj.box = box
+
+    local hl = Instance.new("Highlight")
+    hl.FillTransparency    = 0.72
+    hl.OutlineTransparency = 0
+    hl.FillColor           = CFG.espEnemyColor
+    hl.OutlineColor        = CFG.espEnemyColor
+    hl.Parent              = espFolder
+    obj.hl = hl
+
+    local bb = Instance.new("BillboardGui")
+    bb.Size          = UDim2.new(0, 200, 0, 64)
+    bb.StudsOffset   = Vector3.new(0, 3.4, 0)
+    bb.AlwaysOnTop   = true
+    bb.LightInfluence= 0
+    bb.Parent        = espFolder
+    obj.bb = bb
+
+    local function Lbl(y, sz, col)
+        local l = Instance.new("TextLabel", bb)
+        l.Size = UDim2.new(1,0,0,18); l.Position = UDim2.new(0,0,0,y)
+        l.BackgroundTransparency = 1; l.Font = Enum.Font.GothamBold
+        l.TextSize = sz; l.TextColor3 = col; l.TextStrokeTransparency = 0.28; l.Text = ""
+        return l
+    end
+    obj.nameLbl = Lbl(0,  13, Color3.new(1,1,1))
+    obj.hpLbl   = Lbl(19, 11, Color3.fromRGB(110,255,110))
+    obj.distLbl = Lbl(36, 10, Color3.fromRGB(180,180,255))
+
+    local tr = Drawing.new("Line")
+    tr.Visible=false; tr.Thickness=1.4; tr.Transparency=0.20; tr.Color=CFG.espEnemyColor
+    obj.tracer = tr
+
+    espObjects[pl] = obj
+end
+
+local function RemoveESP(pl)
+    local obj = espObjects[pl]; if not obj then return end
+    pcall(function() obj.box:Destroy()    end)
+    pcall(function() obj.hl:Destroy()     end)
+    pcall(function() obj.bb:Destroy()     end)
+    pcall(function() obj.tracer:Remove()  end)
+    espObjects[pl] = nil
+end
+
+local function HideObj(obj)
+    obj.box.Adornee = nil; obj.hl.Adornee = nil
+    obj.bb.Adornee  = nil; obj.tracer.Visible = false
+end
+
+local function UpdateESP()
+    if not CFG.espEnabled then
+        for _, obj in pairs(espObjects) do HideObj(obj) end; return
+    end
+    local myRoot = GetRoot()
+    for _, pl in pairs(Players:GetPlayers()) do
+        if pl == LocalPlayer then continue end
+        if not espObjects[pl] then CreateESP(pl) end
+        local obj = espObjects[pl]; if not obj then continue end
+        local tChar = pl.Character
+        if not tChar then HideObj(obj); continue end
+        local tRoot = tChar:FindFirstChild("HumanoidRootPart")
+        if not tRoot then HideObj(obj); continue end
+        local dist = myRoot and (tRoot.Position-myRoot.Position).Magnitude or 0
+        if dist > CFG.espMaxDist then HideObj(obj); continue end
+
+        local col  = ESPColor(pl)
+        local tHum = tChar:FindFirstChildOfClass("Humanoid")
+
+        obj.box.Adornee       = CFG.espBox      and tChar or nil
+        obj.box.Color3        = col; obj.box.SurfaceColor3 = col
+        obj.hl.Adornee        = CFG.espHighlight and tChar or nil
+        obj.hl.FillColor      = col; obj.hl.OutlineColor   = col
+        obj.bb.Adornee        = tChar
+
+        obj.nameLbl.Visible    = CFG.espNames
+        obj.nameLbl.Text       = pl.Name
+        obj.nameLbl.TextColor3 = col
+
+        if CFG.espHealth and tHum then
+            local hp  = math.floor(tHum.Health)
+            local mx  = math.max(tHum.MaxHealth,1)
+            local pct = hp / mx
+            obj.hpLbl.Visible    = true
+            obj.hpLbl.Text       = ("HP %d/%d"):format(hp, math.floor(mx))
+            obj.hpLbl.TextColor3 = Color3.fromRGB(math.floor(255*(1-pct)), math.floor(255*pct), 50)
+        else obj.hpLbl.Visible = false end
+
+        obj.distLbl.Visible = CFG.espDistance
+        if CFG.espDistance then obj.distLbl.Text = ("%d st"):format(math.floor(dist)) end
+
+        if CFG.espTracers then
+            local sp, vis = WorldToScreen(tRoot.Position)
+            if vis then
+                local vp = Camera.ViewportSize
+                obj.tracer.From  = Vector2.new(vp.X/2, vp.Y)
+                obj.tracer.To    = sp; obj.tracer.Color = col; obj.tracer.Visible = true
+            else obj.tracer.Visible = false end
+        else obj.tracer.Visible = false end
+    end
+end
+
+Players.PlayerRemoving:Connect(RemoveESP)
+Players.PlayerAdded:Connect(CreateESP)
+for _, pl in pairs(Players:GetPlayers()) do CreateESP(pl) end
+
+-- ══════════════════════════════════════════════════════════════
+-- AIMBOT  (fully fixed)
+-- Key fixes:
+--  1. aimKeyHeld tracked via InputBegan/Ended on ALL input, no stale
+--     closure — we check the CURRENT key at event time AND store which
+--     input started the hold so InputEnded can match it exactly.
+--  2. Visibility raycast: origin is offset from myRoot, and the ray
+--     ends just short of the bone so it can't hit the target itself.
+--     We only skip if something OTHER than the target character blocks it.
+--  3. Smoothing: alpha = dt / (smoothing + dt)  — frame-rate independent
+--     exponential decay. smoothing=0 → instant, smoothing=0.3 → ~300ms.
+--  4. Camera lerp uses slerp on rotation component via CFrame:Lerp which
+--     already does quaternion slerp internally — no gimbal issues.
+-- ══════════════════════════════════════════════════════════════
+local AIM_KEYS = {
+    { label="RMB", mouse=true,  input=Enum.UserInputType.MouseButton2 },
+    { label="LMB", mouse=true,  input=Enum.UserInputType.MouseButton1 },
+    { label="E",   mouse=false, input=Enum.KeyCode.E  },
+    { label="Q",   mouse=false, input=Enum.KeyCode.Q  },
+    { label="F",   mouse=false, input=Enum.KeyCode.F  },
+    { label="V",   mouse=false, input=Enum.KeyCode.V  },
+    { label="Z",   mouse=false, input=Enum.KeyCode.Z  },
+    { label="X",   mouse=false, input=Enum.KeyCode.X  },
+}
+local BONE_NAMES   = { "Head", "UpperTorso", "Torso", "HumanoidRootPart" }
+local BONE_LABELS  = { "Head", "UpperTorso", "Torso", "Root" }
+
+-- Track exactly which input object started the hold so we can match on end
+local aimHoldInput = nil   -- the actual InputObject that started the hold
+
+local function IsAimInput(inp)
+    local k = AIM_KEYS[CFG.aimbotKeyIdx]; if not k then return false end
+    if k.mouse then return inp.UserInputType == k.input
+    else             return inp.KeyCode       == k.input end
+end
+
+UserInputService.InputBegan:Connect(function(inp, gpe)
+    if gpe then return end
+    if IsAimInput(inp) then aimHoldInput = inp end
+end)
+UserInputService.InputEnded:Connect(function(inp)
+    -- Release when the exact same input object ends, OR when matching type ends
+    if inp == aimHoldInput then aimHoldInput = nil; return end
+    if IsAimInput(inp) then aimHoldInput = nil end
+end)
+
+local function AimKeyHeld()
+    if not aimHoldInput then return false end
+    -- Guard: if key was changed while held, release
+    if not IsAimInput(aimHoldInput) then aimHoldInput = nil; return false end
+    return aimHoldInput.UserInputState == Enum.UserInputState.Begin
+end
+
+-- Drawing objects
+local fovCircle = Drawing.new("Circle")
+fovCircle.Radius=CFG.aimbotFOV; fovCircle.Thickness=1.6
+fovCircle.Color=Color3.fromRGB(255,70,70); fovCircle.Transparency=0.28
+fovCircle.Filled=false; fovCircle.Visible=false
+
+local aimDot = Drawing.new("Circle")
+aimDot.Radius=5; aimDot.Thickness=2; aimDot.Color=Color3.fromRGB(255,225,0)
+aimDot.Transparency=0; aimDot.Filled=true; aimDot.Visible=false
+
+local function GetBestTarget()
+    local vp     = Camera.ViewportSize
+    local center = Vector2.new(vp.X/2, vp.Y/2)
+    local myChar = GetChar()
+    local myRoot = GetRoot()
+    local best, bestDist = nil, CFG.aimbotFOV
+
+    for _, pl in pairs(Players:GetPlayers()) do
+        if pl == LocalPlayer then continue end
+        if CFG.aimbotTeamCheck and IsTeammate(pl) then continue end
+        local tChar = pl.Character; if not tChar then continue end
+        local hum   = tChar:FindFirstChildOfClass("Humanoid")
+        if not hum or hum.Health <= 0 then continue end
+
+        local bone = tChar:FindFirstChild(CFG.aimbotBone)
+                  or tChar:FindFirstChild("Head")
+                  or tChar:FindFirstChild("UpperTorso")
+                  or tChar:FindFirstChild("HumanoidRootPart")
+        if not bone then continue end
+        
+        -- ── FIXED visibility check ────────────────────────────
+        -- Only run if enabled AND we have a valid root
+        if CFG.aimbotVisible and myRoot then
+            local origin = myRoot.Position
+            local dir    = bone.Position - origin
+            local dist   = dir.Magnitude
+            if dist > 1 then
+                -- Offset origin slightly forward, stop 1 stud before bone
+                -- so we don't clip our own character or the target's hitbox
+                local ray = Ray.new(
+                    origin + dir.Unit * 3,
+                    dir.Unit * math.max(dist - 4, 0.1)
+                )
+                local hit = Workspace:FindPartOnRayWithIgnoreList(
+                    ray, { myChar, tChar, espFolder }
+                )
+                -- hit=nil means clear line of sight → proceed
+                -- hit=something means blocked → skip this target
+                if hit then continue end
+            end
+        end
+
+        -- Project to screen space
+        local raw = Camera:WorldToViewportPoint(bone.Position)
+        if raw.Z <= 0 then continue end  -- behind camera
+
+        local sp = Vector2.new(raw.X, raw.Y)
+        local d  = (sp - center).Magnitude
+        if d < bestDist then
+            bestDist = d
+            best = { worldPos=bone.Position, screenPos=sp }
+        end
+    end
+    return best
+end
+-- ── FIXED smooth aim  ──────────────────────────────────────────
+-- Frame-rate independent using delta time.
+-- alpha = dt / (smoothing_seconds + dt)
+-- At dt=1/60 and smoothing=0.12 → alpha ≈ 0.33 per frame → ~3 frames to lock
+-- At smoothing=0    → alpha=1 → instant snap every frame
+local lastDt = 1/60
+
+local function SmoothAim(target, dt)
+    local camCF  = Camera.CFrame
+    local goalCF = CFrame.new(camCF.Position, target.worldPos)
+    if CFG.aimbotSmoothing <= 0 then
+        Camera.CFrame = goalCF; return
+    end
+    local alpha = dt / (CFG.aimbotSmoothing + dt)
+    Camera.CFrame = camCF:Lerp(goalCF, alpha)
+end
+
+-- ══════════════════════════════════════════════════════════════
+-- RENDER LOOP
+-- ══════════════════════════════════════════════════════════════
+RunService.RenderStepped:Connect(function(dt)
+    lastDt = dt
+    UpdateESP()
+
+    if not CFG.aimbotEnabled then
+        fovCircle.Visible=false; aimDot.Visible=false; return
+    end
+
+    local vp     = Camera.ViewportSize
+    local center = Vector2.new(vp.X/2, vp.Y/2)
+    fovCircle.Position = center; fovCircle.Radius = CFG.aimbotFOV; fovCircle.Visible = true
+
+    if not AimKeyHeld() then aimDot.Visible=false; return end
+
+    local target = GetBestTarget()
+    if not target then aimDot.Visible=false; return end
+
+    aimDot.Position = target.screenPos; aimDot.Visible = true
+    SmoothAim(target, dt)
+end)
+
+-- ══════════════════════════════════════════════════════════════
+-- GUI
+-- ══════════════════════════════════════════════════════════════
+pcall(function()
+    local old = LocalPlayer.PlayerGui:FindFirstChild("SolarGUI")
+    if old then old:Destroy() end
+end)
+
+local ScreenGui        = Instance.new("ScreenGui")
+ScreenGui.Name         = "SolarGUI"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Global
+ScreenGui.IgnoreGuiInset = true
+ScreenGui.Parent       = LocalPlayer:WaitForChild("PlayerGui")
+
+-- ── Palette ───────────────────────────────────────────────────
+local C = {
+    bg       = Color3.fromRGB(9,  7, 18),
+    panel    = Color3.fromRGB(13, 10, 26),
+    card     = Color3.fromRGB(20, 15, 38),
+    cardHov  = Color3.fromRGB(28, 21, 52),
+    hdr      = Color3.fromRGB(14, 10, 30),
+    accent   = Color3.fromRGB(105, 30, 215),
+    accentLt = Color3.fromRGB(155, 80, 255),
+    accentDm = Color3.fromRGB(52,  14, 110),
+    div      = Color3.fromRGB(32,  20,  58),
+    txtPri   = Color3.fromRGB(230, 218, 255),
+    txtSec   = Color3.fromRGB(128, 100, 180),
+    txtDim   = Color3.fromRGB(60,  44, 100),
+    green    = Color3.fromRGB(50,  220, 110),
+    red      = Color3.fromRGB(255,  60,  60),
+    slBg     = Color3.fromRGB(16,  11,  32),
+    slFill   = Color3.fromRGB(100,  28, 210),
+    slKnob   = Color3.fromRGB(185, 115, 255),
+}
+
+local PW=360; local PH=530; local HDR=44
+
+local Panel = Instance.new("Frame", ScreenGui)
+Panel.Size=UDim2.new(0,PW,0,PH); Panel.Position=UDim2.new(0.04,0,0.06,0)
+Panel.BackgroundColor3=C.bg; Panel.BorderSizePixel=0; Panel.ClipsDescendants=false
+Instance.new("UICorner",Panel).CornerRadius=UDim.new(0,12)
+
+-- Outer glow ring
+local Glow=Instance.new("Frame",Panel)
+Glow.Size=UDim2.new(1,14,1,14); Glow.Position=UDim2.new(0,-7,0,-7)
+Glow.BackgroundColor3=C.accent; Glow.BackgroundTransparency=0.76
+Glow.ZIndex=0; Glow.BorderSizePixel=0
+Instance.new("UICorner",Glow).CornerRadius=UDim.new(0,18)
+
+-- Header
+local Header=Instance.new("Frame",Panel)
+Header.Size=UDim2.new(1,0,0,HDR); Header.BackgroundColor3=C.hdr
+Header.BorderSizePixel=0; Header.ZIndex=3
+Instance.new("UICorner",Header).CornerRadius=UDim.new(0,12)
+local HPatch=Instance.new("Frame",Header)   -- square off bottom corners
+HPatch.Size=UDim2.new(1,0,0,12); HPatch.Position=UDim2.new(0,0,1,-12)
+HPatch.BackgroundColor3=C.hdr; HPatch.BorderSizePixel=0
+
+-- Accent strip
+local Strip=Instance.new("Frame",Header)
+Strip.Size=UDim2.new(0,3,1,-14); Strip.Position=UDim2.new(0,0,0,7)
+Strip.BackgroundColor3=C.accentLt; Strip.BorderSizePixel=0
+Instance.new("UICorner",Strip).CornerRadius=UDim.new(0,2)
+
+local TitleLbl=Instance.new("TextLabel",Header)
+TitleLbl.Size=UDim2.new(1,-70,1,0); TitleLbl.Position=UDim2.new(0,11,0,0)
+TitleLbl.BackgroundTransparency=1; TitleLbl.Font=Enum.Font.GothamBold; TitleLbl.TextSize=15
+TitleLbl.TextColor3=C.txtPri; TitleLbl.Text="✦  solar"
+TitleLbl.TextXAlignment=Enum.TextXAlignment.Left
+
+-- Minimize button
+local MinBtn=Instance.new("TextButton",Header)
+MinBtn.Size=UDim2.new(0,26,0,22); MinBtn.Position=UDim2.new(1,-32,0.5,-11)
+MinBtn.BackgroundColor3=C.accentDm; MinBtn.BorderSizePixel=0
+MinBtn.Font=Enum.Font.GothamBold; MinBtn.TextSize=11
+MinBtn.TextColor3=C.accentLt; MinBtn.Text="—"; MinBtn.ZIndex=4
+Instance.new("UICorner",MinBtn).CornerRadius=UDim.new(0,6)
+
+-- Body
+local Body=Instance.new("Frame",Panel)
+Body.Size=UDim2.new(1,0,0,PH-HDR); Body.Position=UDim2.new(0,0,0,HDR)
+Body.BackgroundTransparency=1; Body.ClipsDescendants=true
+
+-- Tab bar
+local TabBar=Instance.new("Frame",Body)
+TabBar.Size=UDim2.new(1,-16,0,30); TabBar.Position=UDim2.new(0,8,0,7)
+TabBar.BackgroundTransparency=1
+
+-- Content pane
+local Content=Instance.new("Frame",Body)
+Content.Size=UDim2.new(1,-16,1,-48); Content.Position=UDim2.new(0,8,0,44)
+Content.BackgroundColor3=C.panel; Content.BorderSizePixel=0; Content.ClipsDescendants=true
+Instance.new("UICorner",Content).CornerRadius=UDim.new(0,10)
+-- ── Tab system ────────────────────────────────────────────────
+        end
+    end)
+
+    local function SetValue(v)
+        val=math.clamp(v,minV,maxV)
+        local p=(val-minV)/(maxV-minV)
+        fill.Size=UDim2.new(p,0,1,0); knob.Position=UDim2.new(p,-7,0.5,-7)
+        valLbl.Text=tostring(val)..(suffix or ""); onChange(val)
+    end
+    return SetValue
+end
+
+-- SegPick — row of mutually-exclusive buttons
+-- onChange(idx, label)  called ONCE per click only
+local function SegPick(parent,opts,default,onChange)
+    local n=#opts; local card=Card(parent,34); local btns={}
+    local function Highlight(sel)
+        for i,b in ipairs(btns) do
+            TweenService:Create(b,TweenInfo.new(0.1),{
+                BackgroundColor3=i==sel and C.accent or C.slBg,
+                TextColor3      =i==sel and C.txtPri  or C.txtDim,
+            }):Play()
+        end
+    end
+    local gap=3; local bw=math.floor((CW-4-gap*(n-1))/n)
+    for i,opt in ipairs(opts) do
+        local b=Instance.new("TextButton",card)
+        b.Size=UDim2.new(0,bw,1,-8); b.Position=UDim2.new(0,(i-1)*(bw+gap),0,4)
+        b.BackgroundColor3=i==default and C.accent or C.slBg; b.BorderSizePixel=0
+        b.Font=Enum.Font.GothamBold; b.TextSize=10
+        b.TextColor3=i==default and C.txtPri or C.txtDim; b.Text=opt
+        Instance.new("UICorner",b).CornerRadius=UDim.new(0,7); btns[i]=b
+        b.MouseButton1Click:Connect(function()
+            Highlight(i); onChange(i,opt)
+        end)
+    end
+    return card
+end
+-- ══════════════════════════════════════════════════════════════
+-- KEY TAB
+-- ══════════════════════════════════════════════════════════════
+do
+-- ══════════════════════════════════════════════════════════════
+-- AIMBOT TAB
+-- ══════════════════════════════════════════════════════════════
+SecLabel(aimSF,"Main")
+Toggle(aimSF,"🎯","Aimbot",          CFG.aimbotEnabled,  function(v)
+    CFG.aimbotEnabled=v
+    if not v then fovCircle.Visible=false; aimDot.Visible=false end
+end)
+Toggle(aimSF,"👥","Skip Teammates",  CFG.aimbotTeamCheck,function(v) CFG.aimbotTeamCheck=v end)
+Toggle(aimSF,"🧱","Visible Only",    CFG.aimbotVisible,  function(v) CFG.aimbotVisible  =v end)
+
+SecLabel(aimSF,"Hold Key")
+InfoLbl(aimSF,"Hold this button/key to activate aim lock")
+SegPick(aimSF,{"RMB","LMB","E","Q","F","V","Z","X"},CFG.aimbotKeyIdx,function(idx)
+    CFG.aimbotKeyIdx=idx; aimHoldInput=nil   -- clear any stale hold
+end)
+
+SecLabel(aimSF,"Target Bone")
+SegPick(aimSF,BONE_LABELS,1,function(idx)
+    CFG.aimbotBone=BONE_NAMES[idx]
+end)
+
+SecLabel(aimSF,"FOV")
+Slider(aimSF,"⭕","FOV Radius",30,700,CFG.aimbotFOV," px",function(v)
+    CFG.aimbotFOV=v; fovCircle.Radius=v
+end)
+
+SecLabel(aimSF,"Smoothing")
+InfoLbl(aimSF,"0 = instant snap  ·  Higher = slower / smoother follow")
+Slider(aimSF,"〰","Smoothing",0,60,math.floor(CFG.aimbotSmoothing*100),"%",function(v)
+    CFG.aimbotSmoothing=v/100
+end)
+
+-- ══════════════════════════════════════════════════════════════
+-- MINIMIZE + DRAG
+-- ══════════════════════════════════════════════════════════════
+local minimized=false
+MinBtn.MouseButton1Click:Connect(function()
+    minimized=not minimized
+    MinBtn.Text=minimized and "□" or "—"
+    TweenService:Create(Body, TweenInfo.new(0.18,Enum.EasingStyle.Quad),{
+        Size=minimized and UDim2.new(0,0,0,0) or UDim2.new(1,0,0,PH-HDR)
+    }):Play()
+    TweenService:Create(Panel,TweenInfo.new(0.18,Enum.EasingStyle.Quad),{
+        Size=minimized and UDim2.new(0,PW,0,HDR) or UDim2.new(0,PW,0,PH)
+    }):Play()
+end)
+
+local dragging,dragStart,startPos,dragConn=false,nil,nil,nil
+Header.InputBegan:Connect(function(input)
+    if input.UserInputType~=Enum.UserInputType.MouseButton1 then return end
+    local mp=input.Position; local ma=MinBtn.AbsolutePosition; local ms=MinBtn.AbsoluteSize
+    if mp.X>=ma.X and mp.X<=ma.X+ms.X and mp.Y>=ma.Y and mp.Y<=ma.Y+ms.Y then return end
+    dragging=true; dragStart=mp; startPos=Panel.Position
+    if dragConn then dragConn:Disconnect() end
+    dragConn=UserInputService.InputChanged:Connect(function(inp)
+        if not dragging then return end
+        if inp.UserInputType==Enum.UserInputType.MouseMovement then
+            local d=inp.Position-dragStart
+            Panel.Position=UDim2.new(startPos.X.Scale,startPos.X.Offset+d.X,
+                                     startPos.Y.Scale,startPos.Y.Offset+d.Y)
+        end
+    end)
+end)
+Header.InputEnded:Connect(function(input)
+    if input.UserInputType==Enum.UserInputType.MouseButton1 then
+        dragging=false; if dragConn then dragConn:Disconnect(); dragConn=nil end
+    end
+end)
+
+-- ══════════════════════════════════════════════════════════════
+-- START
+-- ══════════════════════════════════════════════════════════════
+if keyUnlocked then
+    SelectTab("👁  ESP")
+    pcall(function()
+        StarterGui:SetCore("SendNotification",{
+            Title="✦  solar", Text="Welcome back — all features unlocked!", Duration=4,
+        })
+    end)
+else
+    SelectTab("🔑  Key")
+    pcall(function()
+        StarterGui:SetCore("SendNotification",{
+            Title="✦  solar", Text="Enter your key in the Key tab to get started", Duration=5,
+        })
+    end)
+end
